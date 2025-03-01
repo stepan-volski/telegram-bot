@@ -1,50 +1,42 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
-const fs = require('fs');
 
 // Load the bot token from environment variables
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// File path to store the status and price
-const statusFile = 'status.json';
+// In-memory storage for status and price (since Railway doesn't support persistent file system)
+let statusData = {};
 
-// Function to read status from the file
+// Function to simulate reading status from memory
 const readStatus = () => {
-  try {
-    const data = fs.readFileSync(statusFile);
-    return JSON.parse(data);
-  } catch (err) {
-    console.error('Error reading status file:', err);
-    return null;
-  }
+  return statusData;
 };
 
-// Function to update status in the file
+// Function to simulate updating status in memory
 const updateStatus = (status, price) => {
-  const statusData = { status, price };
-  fs.writeFileSync(statusFile, JSON.stringify(statusData, null, 2), 'utf-8');
+  statusData = { status, price };
 };
 
 // Handle the "/start" command
-bot.onText('Start', (msg) => {
+bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   bot.sendMessage(chatId, 'Welcome to the Telegram bot!');
 });
 
 // Handle the "/status" command to check price and calculate gain/loss
-bot.onText('Status', async (msg) => {
+bot.onText(/\/status/, async (msg) => {
   const chatId = msg.chat.id;
   try {
     // Fetch the real Bitcoin price from CoinGecko API
     const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
     const currentPrice = response.data.bitcoin.usd;
 
-    // Read the stored status and price
+    // Read the stored status and price from in-memory storage
     const statusData = readStatus();
 
-    if (!statusData) {
+    if (!statusData || !statusData.status) {
       bot.sendMessage(chatId, 'No purchase or sale record found.');
       return;
     }
@@ -78,4 +70,3 @@ bot.onText('Status', async (msg) => {
     bot.sendMessage(chatId, 'Sorry, I couldn\'t fetch the price at the moment.');
   }
 });
-
