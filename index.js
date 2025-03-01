@@ -7,7 +7,8 @@ const bot = new TelegramBot(token, { polling: true });
 const statusData = { status: "", price: 0 };
 
 const updateStatus = (status, price) => {
-  statusData = { status, price };
+  const numericPrice = parseFloat(price);
+  statusData = { status, numericPrice };
 };
 
 bot.onText(/\/start/, (msg) => {
