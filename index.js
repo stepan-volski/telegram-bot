@@ -7,16 +7,16 @@ const bot = new TelegramBot(token, { polling: true });
 
 let priceWatchInterval;
 
-const getBoughtPrice = () => {
-  return parseFloat(process.env.BOUGHT_PRICE);
+const getStatus = () => {
+  return {
+    type: process.env.STATUS_TYPE,
+    price: parseFloat(process.env.STATUS_PRICE)
+  };
 };
 
-const setBoughtPrice = (price) => {
-  process.env.BOUGHT_PRICE = price;
-};
-
-const updateStatus = (status, price) => {
-  setBoughtPrice(price);
+const setStatus = (type, price) => {
+  process.env.STATUS_TYPE = type;
+  process.env.STATUS_PRICE = price;
 };
 
 const startWatch = () => {
@@ -30,20 +30,26 @@ const startWatch = () => {
         "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
       );
       const currentPrice = response.data.bitcoin.usd;
-      const boughtPrice = getBoughtPrice();
-      
-      if (!boughtPrice) {
-        console.log("No bought price set.");
+      const { type, price } = getStatus();
+
+      if (!type || !price) {
+        console.log("No transaction recorded.");
         return;
       }
 
-      const priceChangePercentage = ((currentPrice - boughtPrice) / boughtPrice) * 100;
+      const priceChangePercentage = ((currentPrice - price) / price) * 100;
       
-      // If price changes by more than 5%
       if (Math.abs(priceChangePercentage) >= 5) {
-        const message = priceChangePercentage > 0
-          ? `[GAINING] Current BTC price gained ${priceChangePercentage.toFixed(2)}% from your purchase ($${boughtPrice}) and is now $${currentPrice}.`
-          : `[LOSING] Current BTC price lost ${Math.abs(priceChangePercentage).toFixed(2)}% from your purchase ($${boughtPrice}) and is now $${currentPrice}.`;
+        let message = "";
+        if (type === "bought") {
+          message = priceChangePercentage > 0
+            ? `[GAIN] BTC gained ${priceChangePercentage.toFixed(2)}% from your purchase ($${price}) and is now $${currentPrice}.`
+            : `[LOSS] BTC lost ${Math.abs(priceChangePercentage).toFixed(2)}% from your purchase ($${price}) and is now $${currentPrice}.`;
+        } else {
+          message = priceChangePercentage < 0
+            ? `[GAIN] BTC dropped ${Math.abs(priceChangePercentage).toFixed(2)}% from your sale ($${price}) and is now $${currentPrice}.`
+            : `[LOSS] BTC increased ${priceChangePercentage.toFixed(2)}% from your sale ($${price}) and is now $${currentPrice}.`;
+        }
 
         bot.sendMessage(process.env.CHAT_ID, message);
       }
@@ -66,96 +72,98 @@ bot.onText(/\/start/, (msg) => {
   process.env.CHAT_ID = chatId;
   
   const welcomeMessage = `
-Welcome to the Telegram bot! Here are the available commands:
-  /start - Start the bot and get a welcome message
+Welcome to the Telegram bot! Available commands:
+  /start - Start the bot
   /p - Get current BTC price
-  /s - Check the current status of your BTC purchase or sale
-  /b <price> - Record the purchase price of Bitcoin
-  /startwatch - Start monitoring the price change (every 1 hour)
-  /stopwatch - Stop monitoring the price change
+  /s - Check your last BTC transaction
+  /buy <price> - Record BTC purchase
+  /sell <price> - Record BTC sale
+  /startwatch - Monitor price changes
+  /stopwatch - Stop monitoring
 `;
 
   bot.sendMessage(chatId, welcomeMessage);
 });
 
-bot.onText(/\/b (\d+(\.\d+)?)/, (msg, match) => {
+bot.onText(/\/buy (\d+(\.\d+)?)/, (msg, match) => {
   const chatId = msg.chat.id;
   const price = match[1];
 
-  // Check if the price is a valid number
   if (!price || isNaN(price)) {
-    bot.sendMessage(
-      chatId,
-      "Please provide a valid number as the price. Example: /bought 45000"
-    );
+    bot.sendMessage(chatId, "Please provide a valid price. Example: /b 45000");
     return;
   }
 
   try {
-    updateStatus("bought", price);
-    bot.sendMessage(chatId, `Recorded purchase of BTC at $${price}`);
+    setStatus("bought", price);
+    bot.sendMessage(chatId, `Recorded BTC purchase at $${price}`);
   } catch (error) {
-    bot.sendMessage(chatId, "Sorry, I couldn't process your buy command.");
+    bot.sendMessage(chatId, "Error processing buy command.");
+  }
+});
+
+bot.onText(/\/sell (\d+(\.\d+)?)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const price = match[1];
+
+  if (!price || isNaN(price)) {
+    bot.sendMessage(chatId, "Please provide a valid price. Example: /sell 45000");
+    return;
+  }
+
+  try {
+    setStatus("sold", price);
+    bot.sendMessage(chatId, `Recorded BTC sale at $${price}`);
+  } catch (error) {
+    bot.sendMessage(chatId, "Error processing sell command.");
   }
 });
 
 bot.onText(/\/p/, async (msg) => {
   const chatId = msg.chat.id;
   try {
-    const response = await axios.get(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-    );
-    const message = `The current BTC price is ${response.data.bitcoin.usd} usd`;
-
-    bot.sendMessage(chatId, message);
+    const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+    bot.sendMessage(chatId, `Current BTC price: $${response.data.bitcoin.usd}`);
   } catch (error) {
-    bot.sendMessage(chatId, "Sorry, I couldn't fetch the price at the moment.");
+    bot.sendMessage(chatId, "Error fetching price.");
   }
 });
 
 bot.onText(/\/s/, async (msg) => {
   const chatId = msg.chat.id;
   try {
-    const response = await axios.get(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-    );
+    const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
     const currentPrice = response.data.bitcoin.usd;
+    const { type, price } = getStatus();
 
-    const boughtPrice = getBoughtPrice();
-
-    if (!boughtPrice) {
-      bot.sendMessage(chatId, "No purchase or sale record found.");
+    if (!type || !price) {
+      bot.sendMessage(chatId, "No transaction recorded.");
       return;
     }
 
-    const priceChangePercentage =
-      ((currentPrice - boughtPrice) / boughtPrice) * 100;
-
+    const priceChangePercentage = ((currentPrice - price) / price) * 100;
     let statusMessage = "";
-    if (priceChangePercentage >= 0) {
-      statusMessage = `[GAIN] You bought BTC for $${boughtPrice}, since then it grew by ${priceChangePercentage.toFixed(
-        2
-      )}% and is now ${currentPrice}.`;
+
+    if (type === "bought") {
+      statusMessage = `[STATUS] Bought BTC for $${price}. Change: ${priceChangePercentage.toFixed(2)}%. Current: $${currentPrice}.`;
     } else {
-      statusMessage = `[LOSS] You bought BTC for $${boughtPrice}, since then it fell by ${Math.abs(priceChangePercentage).toFixed(
-        2
-      )}% and is now ${currentPrice}.`;
+      statusMessage = `[STATUS] Sold BTC for $${price}. Change: ${priceChangePercentage.toFixed(2)}%. Current: $${currentPrice}.`;
     }
 
     bot.sendMessage(chatId, statusMessage);
   } catch (error) {
-    bot.sendMessage(chatId, "Sorry, I couldn't fetch the price at the moment.");
+    bot.sendMessage(chatId, "Error fetching price.");
   }
 });
 
 bot.onText(/\/startwatch/, (msg) => {
   const chatId = msg.chat.id;
   startWatch();
-  bot.sendMessage(chatId, "Started monitoring the BTC price every hour.");
+  bot.sendMessage(chatId, "Started monitoring BTC price.");
 });
 
 bot.onText(/\/stopwatch/, (msg) => {
   const chatId = msg.chat.id;
   stopWatch();
-  bot.sendMessage(chatId, "Stopped monitoring the BTC price.");
+  bot.sendMessage(chatId, "Stopped monitoring BTC price.");
 });
