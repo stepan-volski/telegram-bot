@@ -65,17 +65,18 @@ const startWatch = (chatId) => {
 
   priceWatchInterval = setInterval(async () => {
     try {
+      const { price } = getStatus();
       const currentPrice = await getCurrentPrice();
       const priceChangePercentage = ((currentPrice - price) / price) * 100;
 
-      if (Math.abs(priceChangePercentage) >= 5) {
+      if (Math.abs(priceChangePercentage) >= 3) {
         const message = await getStatusMessage();
         bot.sendMessage(chatId, message);
       }
     } catch (error) {
       console.error("Error fetching BTC price:", error);
     }
-  }, 60 * 60 * 1000); // Every hour
+  }, 60 * 1000); // Every hour
 };
 
 const stopWatch = () => {
