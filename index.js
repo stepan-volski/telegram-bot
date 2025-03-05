@@ -36,23 +36,9 @@ async function getStatusMessage() {
     }
 
     const priceChangePercentage = ((currentPrice - price) / price) * 100;
-    let statusTag = "";
 
-    if (type === "sold") {
-      statusTag = currentPrice > price ? "LOSING" : "GAINING";
-    } else {
-      statusTag = currentPrice > price ? "GAINING" : "LOSING";
-    }
+    return `[${priceChangePercentage}%] ${type}: $${price}. Current: $${currentPrice}.`;
 
-    if (type === "bought") {
-      return `[${statusTag}] Bought BTC for $${price}. Change: ${priceChangePercentage.toFixed(
-        2
-      )}%. Current: $${currentPrice}.`;
-    } else {
-      return `[${statusTag}] Sold BTC for $${price}. Change: ${priceChangePercentage.toFixed(
-        2
-      )}%. Current: $${currentPrice}.`;
-    }
   } catch (error) {
     return "Error fetching price.";
   }
@@ -76,7 +62,7 @@ const startWatch = (chatId) => {
     } catch (error) {
       console.error("Error fetching BTC price:", error);
     }
-  }, 60 * 30 * 1000); // Every 30 min
+  }, 60 * 60 * 1000); // Every 60 min
 };
 
 const stopWatch = () => {
@@ -114,7 +100,7 @@ bot.onText(/\/buy (\d+(\.\d+)?)/, (msg, match) => {
   }
 
   try {
-    setStatus("bought", price);
+    setStatus("Bought", price);
     bot.sendMessage(chatId, `Recorded BTC purchase at $${price}`);
   } catch (error) {
     bot.sendMessage(chatId, "Error processing buy command.");
@@ -134,7 +120,7 @@ bot.onText(/\/sell (\d+(\.\d+)?)/, (msg, match) => {
   }
 
   try {
-    setStatus("sold", price);
+    setStatus("Sold", price);
     bot.sendMessage(chatId, `Recorded BTC sale at $${price}`);
   } catch (error) {
     bot.sendMessage(chatId, "Error processing sell command.");
