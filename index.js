@@ -36,9 +36,14 @@ async function getStatusMessage() {
     }
 
     const priceChangePercentage = ((currentPrice - price) / price) * 100;
+    
+    if (type === "Sold") {
+      priceChangePercentage *= -1;
+    }
 
-    return `[${priceChangePercentage}%] ${type}: $${price}. Current: $${currentPrice}.`;
-
+    return `[${priceChangePercentage.toFixed(
+      2
+    )}%] ${type}: $${price}. Current: $${currentPrice}.`;
   } catch (error) {
     return "Error fetching price.";
   }
